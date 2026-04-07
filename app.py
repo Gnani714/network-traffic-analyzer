@@ -6,6 +6,7 @@ from utils.lstm_model import LSTMModel
 from utils.packet_capture import PacketCapture
 from utils.anomaly_detector import AnomalyDetector
 from utils.optimizer import get_optimization_suggestions
+import os
 
 app = Flask(__name__)
 app.secret_key = "network_monitor_secret_key_2024"
@@ -233,4 +234,5 @@ def status():
                     'packets_captured': len(live_traffic_data), 'active_file': active_file})
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
