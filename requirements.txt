@@ -1,0 +1,9 @@
+flask>=2.3.0
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Optional for full LSTM support (uncomment to install):
+# tensorflow>=2.12.0
+
+# Optional for real packet capture (requires root/admin privileges):
+# scapy>=2.5.0

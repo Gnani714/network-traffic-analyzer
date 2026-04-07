@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Monitor - Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        :root{
+            --bg:#0d1117;--surface:#161b22;--surface2:#1c2128;--border:#30363d;
+            --text:#e6edf3;--muted:#8b949e;--accent:#6c63ff;
+            --green:#3fb950;--red:#f85149;--yellow:#d29922;--blue:#58a6ff;
+        }
+        body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;display:flex;flex-direction:column;min-height:100vh}
+        nav{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:58px;position:sticky;top:0;z-index:100}
+        .nav-brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;white-space:nowrap}
+        .nav-links{display:flex;gap:4px}
+        .nav-link{padding:7px 14px;border-radius:8px;font-size:13px;cursor:pointer;background:transparent;border:none;color:var(--muted);transition:all .2s;white-space:nowrap}
+        .nav-link:hover,.nav-link.active{background:rgba(108,99,255,.15);color:var(--accent)}
+        .nav-right{display:flex;align-items:center;gap:12px}
+        .user-badge{padding:5px 12px;background:rgba(108,99,255,.15);border-radius:20px;font-size:12px;color:var(--accent)}
+        .logout{padding:5px 12px;background:rgba(248,81,73,.1);border-radius:8px;color:var(--red);font-size:12px;text-decoration:none;border:1px solid rgba(248,81,73,.2)}
+        main{display:flex;flex:1;overflow:hidden}
+        /* Sidebar */
+        .sidebar{width:280px;min-width:260px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+        .sidebar-header{padding:16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+        .file-list{flex:1;overflow-y:auto;padding:8px}
+        .file-item{padding:10px 12px;border-radius:8px;cursor:pointer;transition:background .2s;border:1px solid transparent;margin-bottom:4px;position:relative}
+        .file-item:hover{background:rgba(255,255,255,.04)}
+        .file-item.active-file{background:rgba(108,99,255,.12);border-color:rgba(108,99,255,.3)}
+        .file-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:28px}
+        .file-meta{font-size:11px;color:var(--muted);margin-top:3px}
+        .file-badge{font-size:10px;padding:1px 6px;border-radius:4px;margin-left:6px}
+        .badge-live{background:rgba(63,185,80,.2);color:var(--green)}
+        .badge-upload{background:rgba(88,166,255,.2);color:var(--blue)}
+        .file-delete{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;font-size:15px;padding:4px;border-radius:4px;opacity:0;transition:opacity .2s}
+        .file-item:hover .file-delete{opacity:1}
+        .file-delete:hover{color:var(--red);background:rgba(248,81,73,.1)}
+        .no-files{padding:20px;text-align:center;color:var(--muted);font-size:13px}
+        /* Content */
+        .content{flex:1;overflow-y:auto;padding:20px}
+        .page{display:none}.page.active{display:block}
+        /* Stats */
+        .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+        .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px}
+        .stat-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+        .stat-value{font-size:26px;font-weight:700}
+        .stat-value.green{color:var(--green)}.stat-value.red{color:var(--red)}
+        .stat-value.yellow{color:var(--yellow)}.stat-value.blue{color:var(--blue)}
+        /* Charts */
+        .charts-grid{display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:20px}
+        .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px}
+        .chart-title{font-size:13px;color:var(--muted);margin-bottom:14px;font-weight:600}
+        canvas{max-height:230px}
+        /* Buttons */
+        .btn{padding:9px 18px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s}
+        .btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{opacity:.85}
+        .btn-success{background:#1f6feb;color:#fff}.btn-success:hover{opacity:.85}
+        .btn-danger{background:var(--red);color:#fff}.btn-danger:hover{opacity:.85}
+        .btn-outline{background:transparent;border:1px solid var(--border);color:var(--text)}.btn-outline:hover{border-color:var(--accent);color:var(--accent)}
+        .btn:disabled{opacity:.4;cursor:not-allowed}
+        .btn-row{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center}
+        /* Upload */
+        .upload-zone{border:2px dashed var(--border);border-radius:12px;padding:36px;text-align:center;transition:all .3s;cursor:pointer}
+        .upload-zone:hover,.upload-zone.dragover{border-color:var(--accent);background:rgba(108,99,255,.05)}
+        .upload-icon{font-size:42px;margin-bottom:10px}
+        /* Anomalies */
+        .anomaly-list{max-height:280px;overflow-y:auto}
+        .anomaly-item{display:flex;gap:10px;align-items:flex-start;padding:10px;border-radius:8px;margin-bottom:6px;background:rgba(255,255,255,.02)}
+        .anomaly-item.high{border-left:3px solid var(--red)}.anomaly-item.medium{border-left:3px solid var(--yellow)}
+        .anomaly-badge{padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600;white-space:nowrap}
+        .badge-high{background:rgba(248,81,73,.2);color:var(--red)}.badge-medium{background:rgba(210,153,34,.2);color:var(--yellow)}
+        /* Suggestions */
+        .suggestion-item{padding:12px 14px;border-radius:10px;margin-bottom:10px;border-left:4px solid transparent}
+        .suggestion-item.critical{background:rgba(248,81,73,.08);border-color:var(--red)}
+        .suggestion-item.warning{background:rgba(210,153,34,.08);border-color:var(--yellow)}
+        .suggestion-item.success{background:rgba(63,185,80,.08);border-color:var(--green)}
+        .suggestion-item.info{background:rgba(88,166,255,.08);border-color:var(--blue)}
+        .suggestion-item.tip{background:rgba(108,99,255,.08);border-color:var(--accent)}
+        .suggestion-title{font-weight:600;font-size:13px;margin-bottom:4px}
+        .suggestion-msg{font-size:12px;color:var(--muted);line-height:1.5}
+        /* Packets table */
+        .packets-table{width:100%;border-collapse:collapse;font-size:12px}
+        .packets-table th{background:rgba(255,255,255,.03);padding:8px 10px;text-align:left;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border)}
+        .packets-table td{padding:7px 10px;border-bottom:1px solid rgba(48,54,61,.5)}
+        .packets-table tr:hover td{background:rgba(255,255,255,.02)}
+        .proto-badge{padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600}
+        .proto-TCP{background:rgba(88,166,255,.2);color:var(--blue)}
+        .proto-UDP{background:rgba(63,185,80,.2);color:var(--green)}
+        .proto-HTTP{background:rgba(108,99,255,.2);color:var(--accent)}
+        .proto-HTTPS{background:rgba(210,153,34,.2);color:var(--yellow)}
+        .proto-DNS{background:rgba(255,150,50,.2);color:#ff9632}
+        .proto-ICMP{background:rgba(200,200,200,.2);color:#ccc}
+        .proto-Other{background:rgba(139,148,158,.2);color:var(--muted)}
+        /* Status */
+        .status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
+        .dot-green{background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite}
+        .dot-red{background:var(--red)}.dot-grey{background:var(--muted)}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+        /* Loading */
+        .loading{display:none;padding:28px;text-align:center;color:var(--muted);font-size:13px}
+        .spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 10px}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        /* Alert */
+        .alert{padding:11px 14px;border-radius:8px;font-size:13px;margin-bottom:14px}
+        .alert-info{background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.2);color:var(--blue)}
+        .alert-success{background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.2);color:var(--green)}
+        .alert-error{background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.2);color:var(--red)}
+        .alert-warn{background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.2);color:var(--yellow)}
+        /* Two col */
+        .two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+        /* No data */
+        .no-data{padding:40px;text-align:center;color:var(--muted);font-size:14px}
+        .no-data .icon{font-size:48px;margin-bottom:12px}
+        /* Active file banner */
+        .active-banner{background:rgba(108,99,255,.12);border:1px solid rgba(108,99,255,.3);border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between}
+        .active-banner span{color:var(--accent)}
+        @media(max-width:900px){
+            main{flex-direction:column}
+            .sidebar{width:100%;min-width:unset;max-height:200px}
+            .stats-grid{grid-template-columns:repeat(2,1fr)}
+            .charts-grid,.two-col{grid-template-columns:1fr}
+        }
+    </style>
+</head>
+<body>
+<nav>
+    <div class="nav-brand"><span>🛡️</span> Network Monitor</div>
+    <div class="nav-links">
+        <button class="nav-link active" onclick="showPage('overview',this)">📊 Overview</button>
+        <button class="nav-link" onclick="showPage('upload',this)">📁 Upload</button>
+        <button class="nav-link" onclick="showPage('live',this)">📡 Live</button>
+        <button class="nav-link" onclick="showPage('predict',this)">🔮 Prediction</button>
+        <button class="nav-link" onclick="showPage('anomalies',this)">⚠️ Anomalies</button>
+        <button class="nav-link" onclick="showPage('optimize',this)">💡 Optimization</button>
+    </div>
+    <div class="nav-right">
+        <span class="user-badge">👤 {{ user }}</span>
+        <a href="/logout" class="logout">Logout</a>
+    </div>
+</nav>
+
+<main>
+    <!-- SIDEBAR: File Manager -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            📂 Captured Files
+            <span id="file-count" style="font-size:11px;background:rgba(108,99,255,.2);color:var(--accent);padding:2px 8px;border-radius:10px">0</span>
+        </div>
+        <div class="file-list" id="file-list">
+            <div class="no-files">No files yet.<br>Upload CSV or run live capture.</div>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="content">
+
+        <!-- OVERVIEW PAGE -->
+        <div id="page-overview" class="page active">
+            <div id="overview-banner" class="active-banner" style="display:none">
+                📄 Analyzing: <span id="banner-filename">—</span>
+                <span style="color:var(--muted);font-size:12px">All sections updated</span>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-card"><div class="stat-label">Total Packets</div><div class="stat-value blue" id="stat-total">—</div></div>
+                <div class="stat-card"><div class="stat-label">Avg Packet Size</div><div class="stat-value green" id="stat-avg">—</div></div>
+                <div class="stat-card"><div class="stat-label">Anomalies Found</div><div class="stat-value red" id="stat-anomalies">—</div></div>
+                <div class="stat-card"><div class="stat-label">Model Status</div><div class="stat-value yellow" id="stat-model">Not Trained</div></div>
+            </div>
+            <div id="overview-loading" class="loading"><div class="spinner"></div>Analyzing with LSTM...</div>
+            <div id="overview-alert" class="alert alert-info" style="display:none"></div>
+            <div class="charts-grid" id="overview-charts" style="display:none">
+                <div class="chart-card">
+                    <div class="chart-title">Traffic Volume Over Time (Packet Length)</div>
+                    <canvas id="trafficChart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-title">Protocol Distribution</div>
+                    <canvas id="protocolChart"></canvas>
+                </div>
+            </div>
+            <div id="no-data-overview" class="no-data">
+                <div class="icon">📂</div>
+                <strong>No data yet</strong><br>
+                Upload a CSV file or run live capture, then click a file in the sidebar to analyze.
+            </div>
+        </div>
+
+        <!-- UPLOAD PAGE -->
+        <div id="page-upload" class="page">
+            <h2 style="margin-bottom:14px">📁 Upload Traffic Dataset</h2>
+            <p style="color:var(--muted);font-size:13px;margin-bottom:18px">Upload a Wireshark CSV export. Columns (time, length, protocol, src, dst) are auto-detected.</p>
+            <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+                <div class="upload-icon">📄</div>
+                <div style="color:var(--text);font-weight:600;margin-bottom:4px">Click to upload or drag & drop</div>
+                <div style="color:var(--muted);font-size:13px">CSV files only — Wireshark format supported</div>
+                <input type="file" id="file-input" accept=".csv" style="display:none" onchange="handleFileUpload(this)">
+            </div>
+            <div id="upload-loading" class="loading"><div class="spinner"></div>Processing & training LSTM model...</div>
+            <div id="upload-result"></div>
+        </div>
+
+        <!-- LIVE MONITOR PAGE -->
+        <div id="page-live" class="page">
+            <h2 style="margin-bottom:14px">📡 Live Traffic Monitor</h2>
+            <div class="btn-row">
+                <button class="btn btn-success" id="btn-start" onclick="startCapture()">▶ Start Capture</button>
+                <button class="btn btn-danger" id="btn-stop" onclick="stopCapture()" disabled>⏹ Stop & Save</button>
+                <span id="capture-status"><span class="status-dot dot-grey"></span> Idle</span>
+            </div>
+            <div class="alert alert-info" style="margin-bottom:14px">
+                💡 When stopped, capture is <strong>automatically saved as CSV</strong> and added to the file list for analysis.
+                Scapy not installed? Simulated traffic is used automatically.
+            </div>
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <div class="chart-title">Live Traffic Stream (Real-time)</div>
+                    <canvas id="liveChart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-title">Recent Packets</div>
+                    <div style="overflow-x:auto;max-height:230px;overflow-y:auto">
+                        <table class="packets-table">
+                            <thead><tr><th>Protocol</th><th>Length</th><th>Source</th><th>Dest</th></tr></thead>
+                            <tbody id="packets-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <!-- Live anomaly & suggestions during capture -->
+            <div id="live-anomaly-section" style="display:none;margin-top:14px">
+                <div class="two-col">
+                    <div class="chart-card">
+                        <div class="chart-title">Live Anomalies</div>
+                        <div id="live-anomaly-list" class="anomaly-list"></div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">Live Suggestions</div>
+                        <div id="live-suggestions-list"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PREDICTION PAGE -->
+        <div id="page-predict" class="page">
+            <h2 style="margin-bottom:14px">🔮 Traffic Prediction</h2>
+            <div id="predict-no-data" class="no-data">
+                <div class="icon">🔮</div>
+                <strong>Analyze a file first</strong><br>
+                Select and analyze a file from the sidebar to enable LSTM prediction.
+            </div>
+            <div id="predict-content" style="display:none">
+                <div class="btn-row">
+                    <button class="btn btn-primary" onclick="runPrediction()">🔮 Generate Prediction</button>
+                </div>
+                <div id="predict-loading" class="loading"><div class="spinner"></div>Running LSTM prediction...</div>
+                <div class="chart-card" id="predict-chart-card" style="display:none">
+                    <div class="chart-title">Traffic Forecast — Next 20 Time Steps (Red = Predicted)</div>
+                    <canvas id="predictChart"></canvas>
+                </div>
+                <div id="predict-info" class="alert alert-success" style="display:none;margin-top:12px"></div>
+            </div>
+        </div>
+
+        <!-- ANOMALIES PAGE -->
+        <div id="page-anomalies" class="page">
+            <h2 style="margin-bottom:14px">⚠️ Anomaly Detection</h2>
+            <div id="anomaly-no-data" class="no-data">
+                <div class="icon">⚠️</div>
+                <strong>Analyze a file first</strong><br>
+                Select and analyze a file from the sidebar.
+            </div>
+            <div id="anomaly-loading" class="loading"><div class="spinner"></div>Detecting anomalies...</div>
+            <div class="two-col" id="anomaly-content" style="display:none">
+                <div class="chart-card">
+                    <div class="chart-title">Traffic with Anomalies Highlighted (Red dots)</div>
+                    <canvas id="anomalyChart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-title">Detected Anomalies</div>
+                    <div id="anomaly-list" class="anomaly-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- OPTIMIZATION PAGE -->
+        <div id="page-optimize" class="page">
+            <h2 style="margin-bottom:14px">💡 Optimization Suggestions</h2>
+            <div id="opt-no-data" class="no-data">
+                <div class="icon">💡</div>
+                <strong>Analyze a file first</strong><br>
+                Select and analyze a file from the sidebar.
+            </div>
+            <div id="suggestions-list"></div>
+        </div>
+
+    </div><!-- /content -->
+</main>
+
+<script>
+// ── State ──────────────────────────────────────────────────
+let currentData = null;   // active analysis result
+let liveChart = null, trafficChart = null, protocolChart = null;
+let predictChart = null, anomalyChart = null;
+let liveInterval = null;
+
+// ── Navigation ─────────────────────────────────────────────
+function showPage(name, btn) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-link').forEach(b => b.classList.remove('active'));
+    document.getElementById('page-' + name).classList.add('active');
+    if (btn) btn.classList.add('active');
+    if (name === 'anomalies' && currentData) renderAnomalyPage();
+    if (name === 'optimize' && currentData) renderOptPage();
+    if (name === 'predict' && currentData) {
+        document.getElementById('predict-no-data').style.display = 'none';
+        document.getElementById('predict-content').style.display = 'block';
+    }
+}
+
+// ── File Sidebar ────────────────────────────────────────────
+async function loadFiles() {
+    const res = await fetch('/files');
+    const data = await res.json();
+    const list = document.getElementById('file-list');
+    document.getElementById('file-count').textContent = data.files.length;
+    if (!data.files.length) {
+        list.innerHTML = '<div class="no-files">No files yet.<br>Upload CSV or run live capture.</div>';
+        return;
+    }
+    list.innerHTML = data.files.map(f => {
+        const isLive = f.name.startsWith('live_capture_');
+        const isActive = f.name === data.active;
+        const kb = (f.size / 1024).toFixed(1);
+        return `<div class="file-item ${isActive ? 'active-file' : ''}" onclick="analyzeFile('${f.name}')">
+            <button class="file-delete" onclick="deleteFile(event,'${f.name}')" title="Delete">🗑</button>
+            <div class="file-name">
+                ${f.name}
+                <span class="file-badge ${isLive ? 'badge-live' : 'badge-upload'}">${isLive ? 'LIVE' : 'CSV'}</span>
+            </div>
+            <div class="file-meta">${kb} KB &nbsp;·&nbsp; ${f.modified}</div>
+        </div>`;
+    }).join('');
+}
+
+async function analyzeFile(fname) {
+    showLoading(true);
+    try {
+        const res = await fetch('/analyze_file', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({filename: fname})
+        });
+        const data = await res.json();
+        if (data.success) {
+            currentData = data;
+            renderAllSections(data);
+            await loadFiles();
+        } else {
+            showAlert('overview-alert', '❌ ' + (data.error || 'Analysis failed'), 'error');
+        }
+    } catch(e) {
+        showAlert('overview-alert', '❌ ' + e.message, 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+async function deleteFile(e, fname) {
+    e.stopPropagation();
+    if (!confirm(`Delete "${fname}"?`)) return;
+    const res = await fetch('/delete_file', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({filename: fname})
+    });
+    const data = await res.json();
+    if (data.success) {
+        if (currentData && currentData.active_file === fname) {
+            currentData = null;
+            clearAllSections();
+        }
+        loadFiles();
+    }
+}
+
+function showLoading(on) {
+    document.getElementById('overview-loading').style.display = on ? 'block' : 'none';
+    document.getElementById('overview-charts').style.display = on ? 'none' : (currentData ? 'grid' : 'none');
+    document.getElementById('no-data-overview').style.display = on ? 'none' : (currentData ? 'none' : 'block');
+}
+
+function showAlert(id, msg, type) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.className = 'alert alert-' + type;
+    el.textContent = msg;
+    el.style.display = 'block';
+}
+
+// ── Render all sections from analysis data ──────────────────
+function renderAllSections(data) {
+    // Overview banner
+    document.getElementById('overview-banner').style.display = 'flex';
+    document.getElementById('banner-filename').textContent = data.filename || 'file';
+
+    // Stats
+    const s = data.stats;
+    document.getElementById('stat-total').textContent = s.total_packets;
+    document.getElementById('stat-avg').textContent = s.avg_length + ' B';
+    document.getElementById('stat-anomalies').textContent = data.anomalies.length;
+    document.getElementById('stat-model').textContent = data.training?.success ? '✓ Trained' : '✗ Error';
+
+    document.getElementById('no-data-overview').style.display = 'none';
+    document.getElementById('overview-charts').style.display = 'grid';
+
+    const t = data.training;
+    showAlert('overview-alert',
+        `✅ ${data.filename || 'File'} analyzed | Backend: ${t?.backend || 'N/A'} | ` +
+        `Loss: ${t?.final_loss || '—'} | Anomalies: ${data.anomalies.length}`, 'success');
+
+    renderTrafficChart(data);
+    renderProtocolChart(data);
+
+    // Prediction
+    document.getElementById('predict-no-data').style.display = 'none';
+    document.getElementById('predict-content').style.display = 'block';
+    document.getElementById('predict-chart-card').style.display = 'none';
+
+    // Anomaly & Opt pages (render if active)
+    const curPage = document.querySelector('.page.active');
+    if (curPage && curPage.id === 'page-anomalies') renderAnomalyPage();
+    if (curPage && curPage.id === 'page-optimize') renderOptPage();
+}
+
+function clearAllSections() {
+    document.getElementById('overview-banner').style.display = 'none';
+    document.getElementById('overview-charts').style.display = 'none';
+    document.getElementById('no-data-overview').style.display = 'block';
+    document.getElementById('overview-alert').style.display = 'none';
+    ['stat-total','stat-avg','stat-anomalies'].forEach(id => document.getElementById(id).textContent = '—');
+    document.getElementById('stat-model').textContent = 'Not Trained';
+    document.getElementById('predict-no-data').style.display = 'block';
+    document.getElementById('predict-content').style.display = 'none';
+    document.getElementById('anomaly-no-data').style.display = 'block';
+    document.getElementById('anomaly-content').style.display = 'none';
+    document.getElementById('opt-no-data').style.display = 'block';
+    document.getElementById('suggestions-list').innerHTML = '';
+}
+
+function renderTrafficChart(data) {
+    const lengths = data.packet_lengths.slice(0, 200);
+    const timestamps = data.timestamps.slice(0, 200);
+    const anomalySet = new Set((data.anomalies||[]).map(a => a.index));
+
+    if (trafficChart) trafficChart.destroy();
+    trafficChart = new Chart(document.getElementById('trafficChart'), {
+        type: 'line',
+        data: {
+            labels: timestamps,
+            datasets: [{
+                label: 'Packet Length',
+                data: lengths,
+                borderColor: '#6c63ff', backgroundColor: 'rgba(108,99,255,.1)',
+                borderWidth: 1.5, pointRadius: 0, fill: true, tension: 0.3
+            },{
+                label: 'Anomaly',
+                data: lengths.map((v,i) => anomalySet.has(i) ? v : null),
+                borderColor: 'transparent', backgroundColor: 'rgba(248,81,73,.85)',
+                pointRadius: 5, type: 'scatter'
+            }]
+        },
+        options: {responsive:true,plugins:{legend:{labels:{color:'#8b949e',boxWidth:12}}},
+            scales:{x:{ticks:{color:'#8b949e'},grid:{color:'#21262d'}},y:{ticks:{color:'#8b949e'},grid:{color:'#21262d'}}}}
+    });
+}
+
+function renderProtocolChart(data) {
+    const proto = data.protocol_counts || {};
+    if (protocolChart) protocolChart.destroy();
+    protocolChart = new Chart(document.getElementById('protocolChart'), {
+        type: 'doughnut',
+        data: {
+            labels: Object.keys(proto),
+            datasets: [{data: Object.values(proto),
+                backgroundColor:['#6c63ff','#58a6ff','#3fb950','#d29922','#f85149','#ff9632'],
+                borderWidth:0}]
+        },
+        options: {responsive:true,plugins:{legend:{labels:{color:'#8b949e',boxWidth:12}}}}
+    });
+}
+
+function renderAnomalyPage() {
+    if (!currentData) return;
+    document.getElementById('anomaly-no-data').style.display = 'none';
+    document.getElementById('anomaly-loading').style.display = 'block';
+    document.getElementById('anomaly-content').style.display = 'none';
+
+    setTimeout(() => {
+        const anomalies = currentData.anomalies || [];
+        const lengths = currentData.packet_lengths.slice(0,150);
+        const aSet = new Set(anomalies.map(a=>a.index));
+
+        if (anomalyChart) anomalyChart.destroy();
+        anomalyChart = new Chart(document.getElementById('anomalyChart'), {
+            type:'line',
+            data:{
+                labels: lengths.map((_,i)=>i),
+                datasets:[
+                    {label:'Normal',data:lengths,borderColor:'#6c63ff',borderWidth:1.5,pointRadius:0},
+                    {label:'Anomaly',data:lengths.map((v,i)=>aSet.has(i)?v:null),borderColor:'transparent',backgroundColor:'rgba(248,81,73,.85)',pointRadius:5,type:'scatter'}
+                ]
+            },
+            options:{responsive:true,plugins:{legend:{labels:{color:'#8b949e',boxWidth:12}}},
+                scales:{x:{ticks:{color:'#8b949e'},grid:{color:'#21262d'}},y:{ticks:{color:'#8b949e'},grid:{color:'#21262d'}}}}
+        });
+
+        const list = document.getElementById('anomaly-list');
+        if (!anomalies.length) {
+            list.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">No anomalies detected ✅</p>';
+        } else {
+            list.innerHTML = anomalies.slice(0,20).map(a =>
+                `<div class="anomaly-item ${a.severity}">
+                    <div>
+                        <span class="anomaly-badge badge-${a.severity}">${a.severity.toUpperCase()}</span>
+                        <strong>${a.type==='spike'?'🔺':'🔻'} ${a.type}</strong>
+                        <div style="font-size:11px;color:var(--muted);margin-top:3px">
+                            Index ${a.index} | Value: ${a.value}B | Expected: ${a.expected}B | Z: ${a.z_score}
+                        </div>
+                    </div>
+                </div>`
+            ).join('');
+        }
+
+        document.getElementById('anomaly-loading').style.display = 'none';
+        document.getElementById('anomaly-content').style.display = 'grid';
+    }, 500);
+}
+
+function renderOptPage() {
+    if (!currentData) return;
+    document.getElementById('opt-no-data').style.display = 'none';
+    const suggestions = currentData.suggestions || [];
+    document.getElementById('suggestions-list').innerHTML = suggestions.map(s =>
+        `<div class="suggestion-item ${s.type}">
+            <div class="suggestion-title">${s.icon||'•'} ${s.title}</div>
+            <div class="suggestion-msg">${s.message}</div>
+        </div>`
+    ).join('');
+}
+
+// ── Upload ──────────────────────────────────────────────────
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover', e=>{e.preventDefault();dz.classList.add('dragover')});
+dz.addEventListener('dragleave', ()=>dz.classList.remove('dragover'));
+dz.addEventListener('drop', e=>{e.preventDefault();dz.classList.remove('dragover');handleFiles(e.dataTransfer.files)});
+
+function handleFileUpload(input) { if(input.files.length) handleFiles(input.files); }
+
+async function handleFiles(files) {
+    const file = files[0];
+    if (!file.name.endsWith('.csv')) { alert('Only CSV files are supported.'); return; }
+    const form = new FormData();
+    form.append('file', file);
+    document.getElementById('upload-loading').style.display = 'block';
+    document.getElementById('upload-result').innerHTML = '';
+    try {
+        const res = await fetch('/upload', {method:'POST', body:form});
+        const data = await res.json();
+        if (data.success) {
+            currentData = data;
+            document.getElementById('upload-result').innerHTML =
+                `<div class="alert alert-success">✅ Uploaded & analyzed: ${file.name} | ` +
+                `${data.stats.total_packets} packets | Backend: ${data.training?.backend}</div>`;
+            renderAllSections(data);
+            loadFiles();
+        } else {
+            document.getElementById('upload-result').innerHTML =
+                `<div class="alert alert-error">❌ ${data.error}</div>`;
+        }
+    } catch(e) {
+        document.getElementById('upload-result').innerHTML =
+            `<div class="alert alert-error">❌ ${e.message}</div>`;
+    } finally {
+        document.getElementById('upload-loading').style.display = 'none';
+    }
+}
+
+// ── Live Capture ─────────────────────────────────────────────
+async function startCapture() {
+    await fetch('/start_capture', {method:'POST'});
+    document.getElementById('btn-start').disabled = true;
+    document.getElementById('btn-stop').disabled = false;
+    document.getElementById('capture-status').innerHTML = '<span class="status-dot dot-green"></span> Capturing...';
+    document.getElementById('live-anomaly-section').style.display = 'block';
+
+    const ctx = document.getElementById('liveChart');
+    if (liveChart) liveChart.destroy();
+    liveChart = new Chart(ctx, {
+        type:'line',
+        data:{labels:[],datasets:[{label:'Packet Length',data:[],borderColor:'#3fb950',borderWidth:1.5,pointRadius:2,tension:.3}]},
+        options:{responsive:true,animation:false,plugins:{legend:{display:false}},
+            scales:{x:{ticks:{color:'#8b949e'},grid:{color:'#21262d'}},y:{ticks:{color:'#8b949e'},grid:{color:'#21262d'}}}}
+    });
+
+    liveInterval = setInterval(fetchLiveData, 1000);
+}
+
+async function stopCapture() {
+    clearInterval(liveInterval);
+    document.getElementById('btn-start').disabled = false;
+    document.getElementById('btn-stop').disabled = true;
+    document.getElementById('capture-status').innerHTML = '<span class="status-dot dot-grey"></span> Saving...';
+
+    const res = await fetch('/stop_capture', {method:'POST'});
+    const data = await res.json();
+
+    document.getElementById('capture-status').innerHTML = `<span class="status-dot dot-grey"></span> Saved: ${data.saved_file || 'none'}`;
+
+    if (data.saved_file) {
+        // Auto-load the saved file analysis
+        const ares = await fetch('/active_analysis');
+        const aData = await ares.json();
+        if (aData.success) {
+            currentData = aData;
+            renderAllSections(aData);
+        }
+        loadFiles();
+        // Show success hint
+        document.getElementById('live-anomaly-section').style.display = 'none';
+        showAlert('overview-alert', `✅ Live capture saved as ${data.saved_file} and analyzed!`, 'success');
+    }
+}
+
+async function fetchLiveData() {
+    try {
+        const res = await fetch('/live_data');
+        const data = await res.json();
+
+        if (liveChart && data.all_lengths.length) {
+            liveChart.data.labels = data.all_times;
+            liveChart.data.datasets[0].data = data.all_lengths;
+            liveChart.update();
+        }
+
+        const tbody = document.getElementById('packets-tbody');
+        tbody.innerHTML = (data.packets || []).reverse().map(p =>
+            `<tr><td><span class="proto-badge proto-${p.protocol}">${p.protocol}</span></td>
+             <td>${p.length}</td><td>${p.src}</td><td>${p.dst}</td></tr>`
+        ).join('');
+
+        // Live anomalies
+        if (data.anomalies && data.anomalies.length) {
+            document.getElementById('live-anomaly-list').innerHTML = data.anomalies.slice(0,8).map(a =>
+                `<div class="anomaly-item ${a.severity}">
+                    <span class="anomaly-badge badge-${a.severity}">${a.severity.toUpperCase()}</span>
+                    <span style="font-size:12px">${a.type==='spike'?'🔺':'🔻'} ${a.type} at #${a.index} — ${a.value}B</span>
+                </div>`
+            ).join('');
+        }
+        if (data.suggestions && data.suggestions.length) {
+            document.getElementById('live-suggestions-list').innerHTML = data.suggestions.slice(0,4).map(s =>
+                `<div class="suggestion-item ${s.type}" style="margin-bottom:8px">
+                    <div class="suggestion-title">${s.icon||''} ${s.title}</div>
+                    <div class="suggestion-msg">${s.message}</div>
+                </div>`
+            ).join('');
+        }
+
+        if (!data.active) {
+            clearInterval(liveInterval);
+            document.getElementById('btn-start').disabled = false;
+            document.getElementById('btn-stop').disabled = true;
+            document.getElementById('capture-status').innerHTML = '<span class="status-dot dot-grey"></span> Idle';
+        }
+    } catch(e) {}
+}
+
+// ── Prediction ───────────────────────────────────────────────
+async function runPrediction() {
+    if (!currentData) return;
+    document.getElementById('predict-loading').style.display = 'block';
+    document.getElementById('predict-chart-card').style.display = 'none';
+    document.getElementById('predict-info').style.display = 'none';
+
+    const values = currentData.packet_lengths.slice(-30);
+    try {
+        const res = await fetch('/predict', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({values})
+        });
+        const data = await res.json();
+
+        document.getElementById('predict-chart-card').style.display = 'block';
+        if (predictChart) predictChart.destroy();
+        const hist = values;
+        predictChart = new Chart(document.getElementById('predictChart'), {
+            type:'line',
+            data:{
+                labels:[...hist.map((_,i)=>`t-${hist.length-i}`),...data.predictions.map((_,i)=>`t+${i+1}`)],
+                datasets:[
+                    {label:'Historical',data:[...hist,null],borderColor:'#58a6ff',borderWidth:2,pointRadius:0},
+                    {label:'Predicted',data:[...new Array(hist.length).fill(null),hist[hist.length-1],...data.predictions],
+                        borderColor:'#f85149',borderDash:[5,3],borderWidth:2,pointRadius:3}
+                ]
+            },
+            options:{responsive:true,plugins:{legend:{labels:{color:'#8b949e',boxWidth:12}}},
+                scales:{x:{ticks:{color:'#8b949e'},grid:{color:'#21262d'}},y:{ticks:{color:'#8b949e'},grid:{color:'#21262d'}}}}
+        });
+
+        const avg = Math.round(data.predictions.reduce((a,b)=>a+b,0)/data.predictions.length);
+        document.getElementById('predict-info').textContent =
+            `📈 Predicted avg traffic: ${avg} bytes/packet over next ${data.predictions.length} steps.`;
+        document.getElementById('predict-info').style.display = 'block';
+    } catch(e) {
+        alert('Prediction failed: ' + e.message);
+    } finally {
+        document.getElementById('predict-loading').style.display = 'none';
+    }
+}
+
+// ── Init ─────────────────────────────────────────────────────
+window.onload = async () => {
+    await loadFiles();
+    // If there's an already-active file from a previous session, load it
+    const res = await fetch('/active_analysis');
+    const data = await res.json();
+    if (data.success) {
+        currentData = data;
+        renderAllSections(data);
+    }
+};
+</script>
+</body>
+</html>
