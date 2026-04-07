@@ -232,7 +232,5 @@ def status():
     return jsonify({'model_trained': lstm_model.is_trained, 'capture_active': capture_active,
                     'packets_captured': len(live_traffic_data), 'active_file': active_file})
 
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)

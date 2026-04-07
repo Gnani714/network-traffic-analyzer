@@ -1,6 +1,7 @@
 flask>=2.3.0
 numpy>=1.24.0
 pandas>=2.0.0
+scikit-learn
 
 # Optional for full LSTM support (uncomment to install):
 # tensorflow>=2.12.0
